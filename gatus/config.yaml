@@ -37,12 +37,10 @@ endpoints:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 2000"
 
-  - name: Cloudflare DNS
+  - name: samueleisen.com
     group: External
-    url: 1.1.1.1
+    url: https://samueleisen.com
     interval: 60s
-    dns:
-      query-name: example.com
-      query-type: A
     conditions:
-      - "[DNS_RCODE] == NOERROR"
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
