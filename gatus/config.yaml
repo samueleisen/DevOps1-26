@@ -4,6 +4,32 @@ ui:
   title: DevOps-26 Status
   header: DevOps-26 Status
 
+# Incident webhook: Gatus -> GitHub repository_dispatch -> Actions workflow.
+# ${...} values are substituted by Gatus from the container environment (see docker-compose.yml).
+alerting:
+  custom:
+    url: "https://api.github.com/repos/${GITHUB_REPOSITORY}/dispatches"
+    method: POST
+    headers:
+      Accept: application/vnd.github+json
+      Authorization: "Bearer ${GITHUB_DISPATCH_TOKEN}"
+      X-GitHub-Api-Version: "2022-11-28"
+    body: |
+      {
+        "event_type": "gatus-incident",
+        "client_payload": {
+          "endpoint_name": "[ENDPOINT_NAME]",
+          "endpoint_group": "[ENDPOINT_GROUP]",
+          "endpoint_url": "[ENDPOINT_URL]",
+          "alert_description": "[ALERT_DESCRIPTION]",
+          "status": "[ALERT_TRIGGERED_OR_RESOLVED]"
+        }
+      }
+    default-alert:
+      failure-threshold: 3   # ~90s on 30s probes; absorbs one-off blips
+      success-threshold: 2
+      send-on-resolved: true
+
 endpoints:
   - name: Prometheus
     group: Monitoring Stack
@@ -12,6 +38,9 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 500"
+    alerts:
+      - type: custom
+        description: "Prometheus health check failing"
 
   - name: Grafana
     group: Monitoring Stack
@@ -21,6 +50,9 @@ endpoints:
       - "[STATUS] == 200"
       - "[BODY].database == ok"
       - "[RESPONSE_TIME] < 500"
+    alerts:
+      - type: custom
+        description: "Grafana health check failing"
 
   - name: Node Exporter
     group: Monitoring Stack
@@ -28,6 +60,9 @@ endpoints:
     interval: 30s
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: custom
+        description: "Node Exporter is not responding"
 
   - name: GitHub
     group: External
@@ -36,6 +71,9 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: custom
+        description: "GitHub is unreachable or slow"
 
   - name: samueleisen.com
     group: External
@@ -44,3 +82,6 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[RESPONSE_TIME] < 2000"
+    alerts:
+      - type: custom
+        description: "samueleisen.com is down or slow"

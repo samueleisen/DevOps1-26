@@ -1,0 +1,80 @@
+name: Gatus Incident
+
+# Triggered by Gatus (alerting.custom in gatus/config.yaml) via:
+#   POST /repos/{owner}/{repo}/dispatches  {"event_type": "gatus-incident", "client_payload": {...}}
+# repository_dispatch workflows only run from the default branch.
+on:
+  repository_dispatch:
+    types: [gatus-incident]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: gatus-incident-${{ github.event.client_payload.endpoint_group }}-${{ github.event.client_payload.endpoint_name }}
+  cancel-in-progress: false
+
+jobs:
+  incident:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or close incident issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const p = context.payload.client_payload || {};
+            const name = p.endpoint_name || 'unknown-endpoint';
+            const group = p.endpoint_group || '';
+            const url = p.endpoint_url || '';
+            const description = p.alert_description || '';
+            const status = String(p.status || '').toUpperCase();
+
+            const label = 'incident';
+            const title = `[Incident] ${group ? group + ' / ' : ''}${name}`;
+            const { owner, repo } = context.repo;
+
+            // Find an existing open incident issue for this endpoint.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: label, per_page: 100,
+            });
+            const existing = open.find((i) => i.title === title);
+
+            if (status === 'RESOLVED') {
+              if (!existing) {
+                core.info(`Resolved event for "${title}" but no open issue found; nothing to do.`);
+                return;
+              }
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `✅ **Resolved** — \`${name}\` is healthy again (${new Date().toISOString()}).`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: existing.number,
+                state: 'closed', state_reason: 'completed',
+              });
+              core.info(`Closed #${existing.number}`);
+              return;
+            }
+
+            // Anything else is treated as TRIGGERED.
+            const lines = [`**Endpoint:** \`${name}\``];
+            if (group) lines.push(`**Group:** ${group}`);
+            if (url) lines.push(`**URL:** ${url}`);
+            if (description) lines.push(`**Description:** ${description}`);
+            lines.push(`**Detected:** ${new Date().toISOString()}`, '');
+            lines.push('_Opened automatically by Gatus via `repository_dispatch`. It closes itself when the endpoint recovers._');
+            const details = lines.join('\n');
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: existing.number,
+                body: `🔴 **Still failing** — alert re-triggered (${new Date().toISOString()}).`,
+              });
+              core.info(`Commented on existing #${existing.number}`);
+              return;
+            }
+
+            const created = await github.rest.issues.create({
+              owner, repo, title, body: details, labels: [label],
+            });
+            core.info(`Opened #${created.data.number}`);
