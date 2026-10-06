@@ -1,0 +1,9 @@
+# Secrets / local environment
+.env
+*.env.local
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp

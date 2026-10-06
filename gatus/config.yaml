@@ -1,0 +1,48 @@
+metrics: true
+
+ui:
+  title: DevOps-26 Status
+  header: DevOps-26 Status
+
+endpoints:
+  - name: Prometheus
+    group: Monitoring Stack
+    url: http://prometheus:9090/-/healthy
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: Grafana
+    group: Monitoring Stack
+    url: http://grafana:3000/api/health
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].database == ok"
+      - "[RESPONSE_TIME] < 500"
+
+  - name: Node Exporter
+    group: Monitoring Stack
+    url: http://host.docker.internal:9100/metrics
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: GitHub
+    group: External
+    url: https://github.com
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 2000"
+
+  - name: Cloudflare DNS
+    group: External
+    url: 1.1.1.1
+    interval: 60s
+    dns:
+      query-name: example.com
+      query-type: A
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
