@@ -68,6 +68,22 @@ services:
     networks:
       - monitoring
 
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    container_name: cloudflared
+    restart: unless-stopped
+    # Outbound-only tunnel to Cloudflare; no ports are published.
+    # Public hostnames (status.* -> http://gatus:8080, metrics.* -> http://grafana:3000)
+    # are configured in the Cloudflare Zero Trust dashboard.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in .env}
+    depends_on:
+      - gatus
+      - grafana
+    networks:
+      - monitoring
+
 networks:
   monitoring:
     name: monitoring
